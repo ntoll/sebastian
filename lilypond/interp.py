@@ -26,7 +26,9 @@ token_pattern = re.compile(r"""^\s*                 # INITIAL WHITESPACE
             (\s*(?P<tie>~)) ?                           # TIE ?
         )
         |                                           # or
-        \\(?P<command>(relative))                   # COMMANDS
+        \\(?P<command>(                             # COMMANDS
+            relative | acciaccatura
+        ))
         |                                           # or
         (?P<open_brace>{) | (?P<close_brace>})      # { or }
     )
@@ -93,9 +95,27 @@ def parse_duration(duration_marker):
         core = int(duration_marker)
         dots = 0
     
-    duration = (2 - (2**-dots)) * 64 / core
+    duration = int((2 - (2**-dots)) * 64 / core)
     
     return duration
+
+
+def process_note(token_dict, relative_mode, prev_note_tuple):
+    # @@@ there is still code duplication between here and the main parsing further on
+    # @@@ some of the args passed in above could be avoided if this and parse_block were methods on a class
+    
+    duration_marker = token_dict["duration"]
+    # duration must be explicit
+    duration = parse_duration(duration_marker)
+    
+    if relative_mode:
+        note_base, accidental_change, octave = note_tuple(token_dict, relative_note_tuple=prev_note_tuple)
+    else:
+        note_base, accidental_change, octave = note_tuple(token_dict)
+    
+    note_value = note_base + (12 * octave) + accidental_change
+    
+    return note_value, duration
 
 
 def parse_block(token_generator, prev_note_tuple = None, relative_mode = False, offset = 0):
@@ -122,6 +142,23 @@ def parse_block(token_generator, prev_note_tuple = None, relative_mode = False, 
                 
                 for obj in parse_block(token_generator, prev_note_tuple=base_note_tuple, relative_mode=True, offset=offset):
                     yield obj
+            elif command == "acciaccatura":
+                # @@@ there is much code duplication between here and the main parsing further on
+                
+                token_dict = token_generator.next()
+                note_value, duration = process_note(token_dict, relative_mode, prev_note_tuple)
+                yield (offset - duration / 2, note_value, duration / 2)
+                
+                token_dict = token_generator.next()
+                note_value, duration = process_note(token_dict, relative_mode, prev_note_tuple)
+                yield (offset, note_value, duration)
+                
+                offset += duration
+                prev_duration = duration
+                
+                # @@@ this should be uncommented but I'll wait until a unit test proves it should be uncommented!
+                # prev_note_tuple = note_base, accidental_change, octave
+                
         elif open_brace:
             for obj in parse_block(token_generator):
                 yield obj
