@@ -10,6 +10,14 @@ MIDI_NOTE_VALUES = {
     "b": 11,
 }
 
+# Cutting up the regex into manageable components - helps with testing
+RE_NOTE = "(?P<note>[abcdefg])"
+RE_8VE = "(?P<octave>'+|,+)"
+RE_REST = "(?P<rest>r)"
+RE_DURATION = "(?P<duration>\d+\.*)"
+RE_SHARP = "(?P<sharp>(is)*)"
+RE_FLAT = "(?P<flat>(es)*)"
+RE_ACCIDENTALS = "(%s%s)?"%(RE_SHARP, RE_FLAT)
 
 token_pattern = re.compile(r"""^\s*                 # INITIAL WHITESPACE
     (
@@ -47,6 +55,26 @@ def tokenize(s):
         else:
             raise StopIteration
 
+<<<<<<< HEAD:lilypond/interp.py
+def parse(s):
+    duration = 16
+    curr_octave = 4
+    offset = 0
+    token_matcher = "(%s%s?%s|%s)%s?"%(RE_NOTE, RE_8VE, RE_ACCIDENTALS, RE_REST,
+            RE_DURATION)
+    
+    for token in tokenize(s):
+        m = re.match(token_matcher, token)
+        if m:
+            note = m.groupdict()["note"]
+            octave_marker = m.groupdict()["octave"]
+            duration_marker = m.groupdict()["duration"]
+            accidental_sharp = m.groupdict()["sharp"]
+            accidental_flat = m.groupdict()["flat"]
+            rest = m.groupdict()["rest"]
+            accidental_change = 0
+            print m.groupdict()
+=======
 
 def note_tuple(token_dict, relative_note_tuple=None):
     note = token_dict["note"]
@@ -132,6 +160,7 @@ def parse_block(token_generator, prev_note_tuple = None, relative_mode = False, 
             rest = token_dict["rest"]
             tie = token_dict["tie"]
             
+>>>>>>> 07dca05617550d47ced26b27dab27063435e3816:lilypond/interp.py
             if duration_marker is None:
                 duration = prev_duration
             else:
@@ -141,6 +170,19 @@ def parse_block(token_generator, prev_note_tuple = None, relative_mode = False, 
                 if relative_mode:
                     note_base, accidental_change, octave = note_tuple(token_dict, relative_note_tuple=prev_note_tuple)
                 else:
+<<<<<<< HEAD:lilypond/interp.py
+                    octave = curr_octave
+                if accidental_sharp:
+                    accidental_change+=len(accidental_sharp)/2
+                if accidental_flat:
+                    accidental_change-=len(accidental_flat)/2
+                note_value = MIDI_NOTE_VALUES[note] + (12 * octave) +\
+                        accidental_change
+                yield (offset, note_value, duration)
+            offset += duration
+        else:
+            raise Exception("unsupported token %s" % token)
+=======
                     note_base, accidental_change, octave = note_tuple(token_dict)
                 note_value = note_base + (12 * octave) + accidental_change
                 
@@ -168,3 +210,4 @@ def parse_block(token_generator, prev_note_tuple = None, relative_mode = False, 
 
 def parse(s):
     return parse_block(tokenize(s))
+>>>>>>> 07dca05617550d47ced26b27dab27063435e3816:lilypond/interp.py
