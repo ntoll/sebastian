@@ -44,20 +44,39 @@ class SMF:
         Thd(format=1, num_tracks=2, division=16).write(out)
         T = 1 # how to translate events times into time_delta using the division above
         
+        # first track will just contain time/key/tempo info
         t = Trk()
+        
         t.sequence_track_name("untitled")
-        t.time_signature(4, 2, 24, 8)
-        t.key_signature(254, 0)
-        t.tempo(6, 138, 27)
+        t.time_signature(4, 2, 24, 8) # 4 4 (2nd arg is power of 2)
+        t.key_signature(0, 0) # C
+        t.tempo(500000) # in microseconds per quarter note
         t.track_end()
         t.write(out)
         
+        # second track will contain actual notes
         t = Trk()
-        tick = 0
+        
+        # we make a list of events including note off events so we can sort by
+        # offset including them (to avoid negative time deltas)
+        
+        events_with_noteoff = []
         for offset, note_value, duration in self.events:
-            t.start_note((offset * T) - tick, note_value)
-            t.end_note(duration * T, note_value)
-            tick = (offset + duration) * T
+            events_with_noteoff.append((True, offset, note_value))
+            events_with_noteoff.append((False, offset + duration, note_value))
+        
+        prev_offset = None
+        for on, offset, note_value in sorted(events_with_noteoff, key=lambda x: x[1]):
+            if prev_offset is None:
+                time_delta = 0
+            else:
+                time_delta = (offset - prev_offset) * T
+            if on:
+                t.start_note(time_delta, note_value)
+            else:
+                t.end_note(time_delta, note_value)
+            prev_offset = offset
+            
         t.track_end()
         t.write(out)
 
@@ -107,14 +126,14 @@ class Trk:
         write_byte(self.data, a)
         write_byte(self.data, b)
     
-    def tempo(self, a, b, c):
+    def tempo(self, t):
         write_varlen(self.data, 0) # tick
         write_byte(self.data, 0xFF)
         write_byte(self.data, 0x51)
         write_varlen(self.data, 3)
-        write_byte(self.data, a)
-        write_byte(self.data, b)
-        write_byte(self.data, c)
+        write_byte(self.data, (t >> 16) % 256)
+        write_byte(self.data, (t >> 8) % 256)
+        write_byte(self.data, (t >> 0) % 256)
     
     def start_note(self, time_delta, note_number):
         write_varlen(self.data, time_delta)

@@ -1,11 +1,13 @@
+#!/usr/bin/env python
+
 import sys; sys.path.append("..")
 
 from lilypond.interp import parse
 from midi.write_midi import SMF
 
 patterns = [
-    "", #    r"\relative c' { \acciaccatura c8 e4 \acciaccatura c8 e4 \acciaccatura c8 e4 }",
-    "", #    r"\relative c' { \acciaccatura c8 e8 f8 e4 }",
+    r"\relative c' { \acciaccatura c8 e4 \acciaccatura c8 e4 \acciaccatura c8 e4 }",
+    r"\relative c' { \acciaccatura c8 e8 f8 e4 }",
     r"\relative c' { r8 e8 f8 e8 }",
     r"\relative c' { r8 e8 f8 g8 }",
     r"\relative c' { e8 f8 g8 r8 }",
@@ -60,10 +62,31 @@ patterns = [
 ]
 
 
-for num, pattern in enumerate(patterns):
-    p = parse(pattern)
-    print num + 1, list(p)
-    f = open("in_c_%s.mid" % (num + 1), "w")
-    s = SMF(parse(pattern))
-    s.write(f)
-    f.close()
+# make a separate MIDI file for each pattern
+
+def separate_files():
+    for num, pattern in enumerate(patterns):
+        p = parse(pattern)
+        print num + 1, list(p)
+        f = open("in_c_%s.mid" % (num + 1), "w")
+        s = SMF(parse(pattern))
+        s.write(f)
+        f.close()
+
+
+# make a single MIDI file with all the patterns in a row
+
+def one_file():
+    big_pattern = []
+    offset = 0
+    for num, pattern in enumerate(patterns):
+        for ev in parse(pattern, offset):
+            if ev[1] != -1: # -1 means a offset check with no sound
+                big_pattern.append(ev)
+            offset = ev[0] # remember the last offset so the next pattern can use it
+        f = open("in_c_all.mid", "w")
+        s = SMF(big_pattern)
+        s.write(f)
+        f.close()
+
+one_file()
