@@ -68,7 +68,11 @@ patterns = [
 
 def separate_files():
     for num, pattern in enumerate(patterns):
+<<<<<<< HEAD:in_c/in_c2midi.py
+        p = parse(pattern)
+=======
         sequence = parse(pattern)
+>>>>>>> 87fd4657b80ba69236113bcb0878a330568da3f4:in_c/in_c2midi.py
         f = open("in_c_%s.mid" % (num + 1), "w")
         s = SMF(sequence)
         s.write(f)

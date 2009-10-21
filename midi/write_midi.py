@@ -2,6 +2,8 @@
 
 from cStringIO import StringIO
 
+from core import Sequence, Point, OFFSET_64, MIDI_PITCH, DURATION_64
+
 
 def write_chars(out, chars):
     out.write(chars)
@@ -36,13 +38,14 @@ def write_varlen(out, n):
 
 class SMF:
     
-    def __init__(self, events):
-        self.events = events
+    def __init__(self, sequence):
+        self.sequence = sequence
         
     def write(self, out):
         
         Thd(format=1, num_tracks=2, division=16).write(out)
-        T = 1 # how to translate events times into time_delta using the division above
+        T = 1 # how to translate events times into time_delta using the
+              # division above
         
         # first track will just contain time/key/tempo info
         t = Trk()
@@ -59,11 +62,15 @@ class SMF:
         
         # we make a list of events including note off events so we can sort by
         # offset including them (to avoid negative time deltas)
+        # @@@ this may eventually be a feature of sequences rather than this
+        # MIDI library
         
         events_with_noteoff = []
-        for offset, note_value, duration in self.events:
-            events_with_noteoff.append((True, offset, note_value))
-            events_with_noteoff.append((False, offset + duration, note_value))
+        for point in self.sequence:
+            offset, note_value, duration = point.tuple(OFFSET_64, MIDI_PITCH, DURATION_64)
+            if note_value is not None:
+                events_with_noteoff.append((True, offset, note_value))
+                events_with_noteoff.append((False, offset + duration, note_value))
         
         prev_offset = None
         for on, offset, note_value in sorted(events_with_noteoff, key=lambda x: x[1]):
@@ -164,12 +171,14 @@ if __name__ == "__main__":
     
     f = open("test.mid", "w")
     
-    test = [ # this is the same format as the test answers in lilypond/tests.py
-        (0, 60, 16), (16, 72, 16), (32, 64, 16), (48, 55, 16), (64, 74, 16),
-        (80, 62, 16), (96, 50, 16), (112, 48, 16), (128, 36, 16), (144, 24, 16),
-        (160, 40, 16), (176, 55, 16), (192, 26, 16), (208, 38, 16), (224, 50, 16),
-        (240, 48, 16)
-    ]
+    test = Sequence([
+        Point({OFFSET_64: o, MIDI_PITCH: m, DURATION_64: d}) for (o, m, d) in [
+            (0, 60, 16), (16, 72, 16), (32, 64, 16), (48, 55, 16),
+            (64, 74, 16), (80, 62, 16), (96, 50, 16), (112, 48, 16),
+            (128, 36, 16), (144, 24, 16), (160, 40, 16), (176, 55, 16),
+            (192, 26, 16), (208, 38, 16), (224, 50, 16), (240, 48, 16)
+        ]
+    ])
     
     s = SMF(test)
     s.write(f)

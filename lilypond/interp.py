@@ -1,3 +1,5 @@
+from core import Sequence, Point, OFFSET_64, MIDI_PITCH, DURATION_64
+
 import re
 
 MIDI_NOTE_VALUES = {
@@ -16,8 +18,8 @@ token_pattern = re.compile(r"""^\s*                 # INITIAL WHITESPACE
         (                                           # NOTE
             (
                 (?P<note>[abcdefg])                     # NOTE NAME
-                (?P<octave>'+|,+) ?                     # OCTAVE ?
                 ((?P<sharp>(is)+)|(?P<flat>(es)+)) ?    # ACCIDENTALS ?
+                (?P<octave>'+|,+) ?                     # OCTAVE ?
                 (=(?P<octave_check>'+|,+)) ?            # OCTAVE CHECK ?
                 |                                       # or
                 (?P<rest>r)                             # REST
@@ -53,6 +55,7 @@ def tokenize(s):
 def note_tuple(token_dict, relative_note_tuple=None):
     note = token_dict["note"]
     octave_marker = token_dict["octave"]
+    octave_check = token_dict["octave_check"]
     accidental_sharp = token_dict["sharp"]
     accidental_flat = token_dict["flat"]
     accidental_change = 0
@@ -81,6 +84,19 @@ def note_tuple(token_dict, relative_note_tuple=None):
     if accidental_flat:
         accidental_change -= len(accidental_flat) / 2
     
+    if octave_check is None:
+        pass
+    elif "'" in octave_check:
+        correct_octave = 4 + len(octave_check)
+        if octave != correct_octave:
+            print "WARNING: failed octave check" # @@@ better reporting of warning
+            octave = correct_octave
+    elif "," in octave_check:
+        correct_octave = 4 - len(octave_check)
+        if octave != correct_octave:
+            print "WARNING: failed octave check" # @@@ better reporting of warning
+            octave = correct_octave
+    
     return MIDI_NOTE_VALUES[note], accidental_change, octave
 
 
@@ -101,8 +117,10 @@ def parse_duration(duration_marker):
 
 
 def process_note(token_dict, relative_mode, prev_note_tuple):
-    # @@@ there is still code duplication between here and the main parsing further on
-    # @@@ some of the args passed in above could be avoided if this and parse_block were methods on a class
+    # @@@ there is still code duplication between here and the main parsing
+    # further on
+    # @@@ some of the args passed in above could be avoided if this and
+    # parse_block were methods on a class
     
     duration_marker = token_dict["duration"]
     # duration must be explicit
@@ -143,23 +161,25 @@ def parse_block(token_generator, prev_note_tuple=None, relative_mode=False, offs
                     
                     for obj in parse_block(token_generator, prev_note_tuple=base_note_tuple, relative_mode=True, offset=offset):
                         yield obj
-                        last_offset = obj[0]
+                        last_offset = obj[OFFSET_64]
                     offset = last_offset
                 elif command == "acciaccatura":
-                    # @@@ there is much code duplication between here and the main parsing further on
+                    # @@@ there is much code duplication between here and the
+                    # main parsing further on
                     
                     token_dict = token_generator.next()
                     note_value, duration = process_note(token_dict, relative_mode, prev_note_tuple)
-                    yield (offset - duration / 2, note_value, duration / 2)
+                    yield Point({OFFSET_64: offset - duration / 2, MIDI_PITCH: note_value, DURATION_64: duration / 2})
                     
                     token_dict = token_generator.next()
                     note_value, duration = process_note(token_dict, relative_mode, prev_note_tuple)
-                    yield (offset, note_value, duration)
+                    yield Point({OFFSET_64: offset, MIDI_PITCH: note_value, DURATION_64: duration})
                     
                     offset += duration
                     prev_duration = duration
                     
-                    # @@@ this should be uncommented but I'll wait until a unit test proves it should be uncommented!
+                    # @@@ this should be uncommented but I'll wait until a
+                    # unit test proves it should be uncommented!
                     # prev_note_tuple = note_base, accidental_change, octave
                     
             elif open_brace:
@@ -196,7 +216,7 @@ def parse_block(token_generator, prev_note_tuple=None, relative_mode=False, offs
                         # if there is a tie following this note, we defer it
                         tie_deferred = True
                     else:
-                        yield (offset, note_value, duration)
+                        yield Point({OFFSET_64: offset, MIDI_PITCH: note_value, DURATION_64: duration})
                     
                     prev_note_tuple = note_base, accidental_change, octave
                 
@@ -205,9 +225,9 @@ def parse_block(token_generator, prev_note_tuple=None, relative_mode=False, offs
                 
                 prev_duration = duration
     except StopIteration:
-        yield (offset, -1, -1)
+        yield Point({OFFSET_64: offset})
         raise StopIteration
 
 
 def parse(s, offset=0):
-    return parse_block(tokenize(s), offset=offset)
+    return Sequence(parse_block(tokenize(s), offset=offset))
